@@ -1,0 +1,95 @@
+pipeline {
+    agent any
+
+    tools {
+        maven 'maven' // Name from "Manage Jenkins → Global Tool Configuration"
+    }
+
+    stages {
+        stage('Preparation') {
+            steps {
+                git(
+                    credentialsId: '2064bf76-afca-4011-a13f-7588e45f5587',
+                    url: 'https://github.com/krishnaveni-byte/hello-world.git'
+                )
+            }
+        }
+
+        stage('Build') {
+                steps {
+                        script {
+                            def mvnHome = tool 'maven' // Name from Global Tool Configuration
+                             bat "\"${mvnHome}\\bin\\mvn\" clean install package -e"
+                          }        
+                  }
+        }
+
+        stage('Deploy') {
+            steps {
+                sshPublisher(
+                    publishers: [
+                        sshPublisherDesc(
+                            configName: 'docker',
+                            transfers: [
+                                sshTransfer(
+                                    cleanRemote: false,
+                                    excludes: '',
+                                    execCommand: '''
+                                        docker stop hellocon || true;
+                                        docker rm -f hellocon || true;
+                                        docker image rm -f helloimage || true;
+                                        cd /opt/new;
+                                        docker build -t helloimage .
+                                    ''',
+                                    execTimeout: 120000,
+                                    flatten: false,
+                                    makeEmptyDirs: false,
+                                    noDefaultExcludes: false,
+                                    patternSeparator: '[, ]+',
+                                    remoteDirectory: '//opt//new',
+                                    remoteDirectorySDF: false,
+                                    removePrefix: 'webapp/target',
+                                    sourceFiles: 'webapp/target/*.war'
+                                )
+                            ],
+                            usePromotionTimestamp: false,
+                            useWorkspaceInPromotion: false,
+                            verbose: false
+                        )
+                    ]
+                )
+            }
+        }
+
+        stage('Post-Deploy') {
+            steps {
+                sshPublisher(
+                    publishers: [
+                        sshPublisherDesc(
+                            configName: 'docker',
+                            transfers: [
+                                sshTransfer(
+                                    cleanRemote: false,
+                                    excludes: '',
+                                    execCommand: 'docker run -d --name hellocon -p 8090:8080 helloimage',
+                                    execTimeout: 120000,
+                                    flatten: false,
+                                    makeEmptyDirs: false,
+                                    noDefaultExcludes: false,
+                                    patternSeparator: '[, ]+',
+                                    remoteDirectory: '',
+                                    remoteDirectorySDF: false,
+                                    removePrefix: '',
+                                    sourceFiles: ''
+                                )
+                            ],
+                            usePromotionTimestamp: false,
+                            useWorkspaceInPromotion: false,
+                            verbose: false
+                        )
+                    ]
+                )
+            }
+        }
+    }
+}
